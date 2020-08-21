@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<!-- 头部CSS文件引入 -->
+<headerCss th:fragment="headerCss">
+
+    <!-- 框架的基本样式 start -->
+    <link th:href="@{/webjars/plugins/bootstrap/bootstrap.min.css}" rel="stylesheet">
+    <link th:href="@{/webjars/plugins/font-awesome/font-awesome.min93e3.css}" rel="stylesheet">
+    <!-- 框架的基本样式 end -->
+
+    <!-- datetimepicker 开始  -->
+    <link th:href="@{/webjars/plugins/datetimepicker/bootstrap-datetimepicker.min.css}" rel="stylesheet">
+    <!-- datetimepicker  结束  -->
+
+	<!-- 第三方插件  select2 start  -->
+    <link th:href="@{/webjars/plugins/select2/css/select2.css}" rel="stylesheet">
+    <!-- 第三方插件  select2 end  -->
+
+	<!-- 样式补充公共文件,自定义样式可写在此文件 -->
+	<link th:href="@{/webjars/css/common.css}" rel="stylesheet">
+
+</headerCss>
+
+<!-- 底部js文件引入 -->
+<footerJs th:fragment="footerJs">
+	<script th:src="@{/webjars/plugins/jquery/jquery.min.js}"></script>
+    <script th:src="@{/webjars/plugins/bootstrap/bootstrap.min.js}"></script>
+
+    <!-- 弹窗插件 layer alert start -->
+    <script th:src="@{/webjars/plugins/layer/layer.js}"></script>
+    <!-- 弹窗插件 layer alert end -->
+
+    <!-- jquery验证start -->
+    <script th:src="@{/webjars/plugins/jquery-validate/jquery.validate.min.js}"></script>
+    <script th:src="@{/webjars/plugins/jquery-validate/jquery.validate-extend.js}"></script>
+    <script th:src="@{/webjars/plugins/jquery-validate/messages_zh.min.js}"></script>
+    <!-- jquery验证end -->
+
+    <!-- bootstrap datetimepicker js start-->
+    <script th:src="@{/webjars/plugins/datetimepicker/bootstrap-datetimepicker.js}"></script>
+    <script th:src="@{/webjars/plugins/datetimepicker/bootstrap-datetimepicker.zh-CN.js}"></script>
+    <!-- bootstrap datetimepicker js end-->
+
+    <!-- select2 下拉选择框优化插件 start -->
+    <script th:src="@{/webjars/plugins/select2/js/select2.js}"></script>
+    <script th:src="@{/webjars/plugins/select2/js/i18n/zh-CN.js}"></script>
+    <!-- select2 下拉选择框优化插件 end  -->
+
+    <!-- 百度eCharts插件 start -->
+    <script th:src="@{/webjars/plugins/echarts/echarts.min.js}"></script>
+    <!-- 百度eCharts插件 end -->
+
+    <!-- common：自定义全局js放置处 -->
+    <script th:src="@{/webjars/js/common.js}"></script>
+</footerJs>
+</html>

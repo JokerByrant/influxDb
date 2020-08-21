@@ -1,0 +1,17 @@
+server:
+  port: 7788
+
+
+spring:
+  # influxDB
+  influx:
+    url: http://192.168.1.129:6086
+    user: admin
+    password: admin
+    database: rsdun_sensor
+  # thymeleaf
+  thymeleaf:
+    cache: false
+    prefix: classpath:/templates/
+    suffix: .html
+    encoding: UTF-8

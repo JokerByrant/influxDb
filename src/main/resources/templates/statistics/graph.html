@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"  xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity5" >
+
+<head>
+
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>云鱼管理后台</title>
+
+    <div th:replace="common/layout :: headerCss"></div>
+
+    <style>
+        .mySpan {
+            position: relative;
+            top: 4px;
+            font-size: 12px;
+            font-weight: bolder;
+            padding-left: 10px;
+        }
+        /*图标切换页面图标样式*/
+        .page-change {
+            position: absolute;
+            bottom: 30px;
+        }
+        .page-change i{
+            color: #56A14D;
+            margin-right: 5px;
+            font-size: 14px;
+        }
+        .page-change .btn-default{
+            color: black;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body  class="gray-bg">
+<div class="wrapper wrapper-content animated fadeInRight">
+    <div class="row">
+        <div class="col-xs-8">
+            <div class="ibox float-e-margins">
+                <div class="ibox-content">
+                    <div class="row">
+                        <div id="chart-graph" style="width: 100%;height:400px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xs-4">
+            <div class="ibox float-e-margins">
+                <div class="ibox-content">
+                    <form id="validateForm" class="form-horizontal m-t" style="width: 100%;height:400px;">
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">查询类型</label>
+                            <div class="col-sm-9">
+                                <select class="form-control selectpicker" id="type" name="type" required></select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">数据类型</label>
+                            <div class="col-sm-9">
+                                <select class="form-control selectpicker" id="dataType" name="dataType">
+                                    <option value="0">平均值</option>
+                                    <option value="1">最大值</option>
+                                    <option value="2">最小值</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">统计开始时间</label>
+                            <div class="col-sm-9">
+                                <input type="text" placeholder="统计开始时间" id="startDate" name="startDate" class="form-control" readonly required/>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">精度</label>
+                            <div class="col-sm-9">
+                                <select class="form-control selectpicker" id="accuracy" name="accuracy">
+                                    <option value="0">10秒</option>
+                                    <option value="1">1分</option>
+                                    <option value="2">10分</option>
+                                    <option value="3">1小时</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label">数量</label>
+                            <div class="col-sm-9">
+                                <select class="form-control selectpicker" id="num" name="num">
+                                    <option value="200">200</option>
+                                    <option value="500">500</option>
+                                    <option value="1000">1000</option>
+                                    <option value="2000">2000</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-button">
+                            <div class="col-sm-9 col-sm-offset-2" >
+                                <button type="submit" class="btn btn-primary len-btn">查  询</button>
+                            </div>
+                        </div>
+                    </form>
+                    <div class="page-change">
+                        <button class="btn btn-default" onclick="onPageChange(0)"><i class="fa fa-long-arrow-left"></i>向前</button>
+                        <button class="btn btn-default" onclick="onPageChange(1)"><i class="fa fa-long-arrow-right"></i>向后</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div th:replace="common/layout :: footerJs"></div>
+
+<script th:inline="javascript">
+    $("#type, #accuracy, #dataType, #num").select2({
+        multiple:false,
+        width :"100%",
+        allowClear:false
+    });
+    // 时间框默认选择当前时间
+    $('#startDate').val(new Date().Format("yyyy-MM-dd 00:00"));
+    // 精度默认选择10min
+    $('#accuracy').val(0).trigger('change');
+
+    // 基于准备好的dom，初始化echarts实例
+    let graphChart = echarts.init(document.getElementById('chart-graph'));
+
+    // 用于暂存查询当前图表用的参数
+    let currentParam = null;
+    let xAxis = [];
+
+    let intervalObj = null;
+
+    let proAttrs = [];
+
+    $().ready(function() {
+        let model =  [[${model}]];
+        if (model) {
+            document.getElementById("sensorCodeSpan").innerText = model.sensorCode;
+            $('#sensorUid').val(model.sensorUid);
+            $('#sensorCode').val(model.sensorCode);
+        }
+        proAttrs = getProAttrs();
+
+        jQuery.validator.addMethod("checkIsBigger", function(value, param) {
+            var isBigger = true;
+            if ($('#yMin').val() && parseInt($('#yMin').val()) >= value) {
+                isBigger = false;
+            }
+            return isBigger;
+        });
+        jQuery.validator.addMethod("checkIsSmaller", function(value, param) {
+            var isSmaller = true;
+            if ($('#yMax').val() && parseInt($('#yMax').val()) <= value) {
+                isSmaller = false;
+            }
+            return isSmaller;
+        });
+        // 点击查询按钮，从后台获取折线图数据
+        var returnvalidate =  $("#validateForm").validate({
+            rules:{
+                yMax: {
+                    isZzs: true,
+                    checkIsBigger: true
+                },
+                yMin: {
+                    isInteger: true,
+                    checkIsSmaller: true
+                }
+            },
+            messages: {
+                yMax: {
+                    isZzs: '请输入正整数！',
+                    checkIsBigger: 'y轴最大值必须大于y轴最小值！'
+                },
+                yMin: {
+                    isInteger: '请输入整数！',
+                    checkIsSmaller: 'y轴最小值必须小于y轴最大值！'
+                }
+            },
+            submitHandler: function() {
+                currentParam = {  // 记录当前查询的参数
+                    sensorCode: $('#sensorCode').val(),
+                    num: $('#num').val(),
+                    dataType: $("#dataType").val(),
+                    accuracy: $('#accuracy').val(),
+                    initialDate: $('#startDate').val(), // 记录初次查询时的开始时间
+                    startDate: $('#startDate').val(),
+                    yMax: $('#yMax').val(),
+                    yMin: $('#yMin').val()
+                };
+
+                reRenderGraph();
+                intervalObj && clearInterval(intervalObj);
+                if ($("#graphType").val() == 1) { // 实时曲线
+                    intervalObj = setInterval(function () {
+                        reRenderGraph();
+                    }, 5000);
+                }
+            },
+            invalidHandler: function(form, validator) {  //不通过回调
+                return false;
+            }
+        })
+    });
+
+    // 处理返回的折线图数据，重新渲染图表
+    function reRenderGraph() {
+        let rows = [];
+        proAttrs.forEach(function (item) {
+            rows.push({
+                name: item.attrName,
+                commCode: item.commCode,
+                datas: []
+            });
+        });
+
+        var loadIndex = layer.load();
+        $.ajax({
+            type: "get",
+            url: "/sysSensorCollect/selectDataForLineChart",
+            data: currentParam,
+            contentType:"application/x-www-form-urlencoded; charset=UTF-8",
+            dataType: "json",
+            async: false,
+            success : function(data) {
+                rows.forEach(function (row) {
+                    data.rows.forEach(function (item) {
+                        if (row.commCode) { // commCode为空，数据获取不到
+                            row.datas.push({
+                                date: new Date(item.time).Format("yyyy-MM-dd hh:mm:ss"),
+                                value: eval("item.A" + row.commCode)
+                            })
+                        }
+                    });
+                })
+
+                refreshGraphChart(rows);
+                layer.close(loadIndex);
+            }
+        });
+    }
+
+    // 缓存基础rows
+    function getProAttrs () {
+        let sensorUids = $('#sensorUid').val();
+        let rows = [];
+        $.ajax({
+            url: '/sysProAttr/selectAttrListBySensorUids',
+            type: 'get',
+            data: { "sensorUids": sensorUids, "operType": 2 },
+            dataType: "json",
+            traditional: true,
+            async: false,
+            success: function (data) {
+                rows = data.rows;
+            }
+        })
+
+        return rows;
+    }
+
+    // 根据获取到的数据刷新统计图
+    function refreshGraphChart (rows) {
+        graphChart.showLoading();
+
+        // 渲染在表单里的最大最小值
+        let maxData = 0;
+        let minData = -1;
+
+        // 初始化图表数据和图例名
+        let sourceData = [];
+        let names = [];
+        for (let x in rows) {
+            if (names.indexOf(rows[x].name) == -1) {
+                names.push(rows[x].name);
+                sourceData.push([rows[x].name]);
+            }
+        }
+
+        // 组装x轴坐标
+        xAxis = getXAxis();
+        xAxis.unshift("product");
+
+        // 从后台获取到的数据可能只包含部分日期的数据，因此需要将缺少的日期数据补上，数据填充0
+        for (let x = 1; x < xAxis.length; x++) {
+            // 为sourceData数据赋值
+            sourceData.forEach(function (item, index) {
+                item[x] = (0);
+                rows[index].datas.forEach(function (data) {
+                    if (data.date == xAxis[x]) {
+                        item[x] = data.value;
+                    }
+                })
+
+                // 获取最大最小值
+                if (item[x] > maxData) {
+                    maxData = item[x];
+                }
+                if (item[x] < minData || minData == -1) {
+                    minData = item[x];
+                }
+            })
+        }
+
+        // 添加折线
+        let seriesData = [];
+        for (let i = 0; i < sourceData.length; i++) {
+            seriesData.unshift({
+                type: 'line',
+                smooth: true,
+                seriesLayoutBy: 'row'
+            })
+        };
+        sourceData.unshift(xAxis);
+
+        graphChart.hideLoading();
+        graphChart.setOption({ // 加载图表
+            legend: {
+                left: '5%',
+                top: "0%",
+                data: names
+            },
+            tooltip: {
+                trigger: 'axis',
+            },
+            grid: {
+                left: '5%',
+                right: '5%'
+            },
+            xAxis: {
+                type: 'category',
+                axisLine: {
+                    lineStyle: {
+                        color: '#ccc'
+                    }
+                },
+                axisLabel: {
+                    margin: 10,
+                    textStyle: {
+                        color: '#999'
+                    },
+                    formatter: function (time) { // x轴仅显示时分秒
+                        return new Date(time).Format("hh:mm:ss");
+                    }
+                },
+                axisTick: {
+                    show: false,
+                }
+            },
+            yAxis: {
+                type: 'value',
+                boundaryGap: [0, '20%'],
+                min: function(value) {
+                    if (currentParam.yMin) {
+                        return currentParam.yMin;
+                    } else {
+                        return 0;
+                    }
+                },
+                max: function(value) {
+                    if (currentParam.yMax) {
+                        return currentParam.yMax;
+                    } else {
+                        return parseInt(value.max * 1.2);
+                    }
+                },
+                axisTick: {
+                    show: false
+                },
+                axisLine: { // y轴线
+                    show: true,
+                    lineStyle: {
+                        color: '#ccc'
+                    }
+                },
+                axisLabel: { // y轴刻度
+                    textStyle: {
+                        color: '#999'
+                    }
+                },
+                splitLine: { // 分隔线
+                    lineStyle: {
+                        type: 'dashed',
+                        color: '#ccc'
+                    }
+                }
+            },
+            dataZoom: [{ // 区域缩放组件
+                show: true,
+                height: 30,
+                bottom: '0%',
+                width: "92%",
+                right: 60,
+                handleIcon: 'M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.3v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z M13.3,24.4H6.7V23h6.6V24.4z M13.3,19.6H6.7v-1.4h6.6V19.6z',
+                handleSize: '80%',
+                handleStyle: {
+                    color: '#fff',
+                    shadowBlur: 3,
+                    shadowColor: 'rgba(0, 0, 0, 0.6)',
+                    shadowOffsetX: 2,
+                    shadowOffsetY: 2
+                },
+                xAxisIndex: [0]
+            }, {
+                type: "inside",
+                show: true,
+                xAxisIndex: [0]
+            }],
+            series: seriesData,
+            dataset: {
+                source: sourceData
+            }
+        });
+
+        // 填充最大最小值
+        $('#max')[0].innerText = maxData;
+        $('#min')[0].innerText = minData;
+    };
+
+    // 切换页面事件 flag： 0->上一页  1->下一页
+    function onPageChange (flag) {
+        if (currentParam == null || xAxis.length == 0) {
+            layer.msg("请先进行一次查询！");
+            return;
+        }
+
+        let xlength = xAxis.length - 1;
+        if (flag == 1 ) { // 点击了下一页
+            let isTimeGreaterThanNow = checkIsTimeGreaterThanNow(xAxis[xlength]);
+            if (isTimeGreaterThanNow) {
+                layer.msg('当前页是最后一页！')
+                return;
+            }
+            currentParam.startDate = xAxis[xlength];
+            reRenderGraph();
+        } else if (flag == 0) { // 点击了上一页
+            if (new Date(currentParam.startDate).getTime() == new Date(currentParam.initialDate).getTime()) {
+                layer.msg('当前页是第一页！')
+                return;
+            }
+            currentParam.startDate = getStartDateByAccuracyAndEndDate(currentParam.startDate);
+            reRenderGraph();
+        }
+    };
+
+    // 根据结束时间获取开始时间
+    function getStartDateByAccuracyAndEndDate(endDate) {
+        let endDateTimeStamp = new Date(endDate).getTime();
+        let differenceTimeStamp;
+        switch(currentParam.accuracy) {
+            case '0':
+                differenceTimeStamp = 10*1000;
+                break;
+            case '1':
+                differenceTimeStamp = 60*1000;
+                break;
+            case '2':
+                differenceTimeStamp = 600*1000;
+                break;
+            case '3':
+                differenceTimeStamp = 60*60*1000;
+                break;
+        }
+        differenceTimeStamp = differenceTimeStamp * (currentParam.num-1);
+
+        let startDate = new Date(endDateTimeStamp - differenceTimeStamp).Format('yyyy-MM-dd hh:mm:ss');
+        return startDate;
+    }
+
+    /**
+     * 检查给定的时间是否越界(大于当前时间)
+     * @param time 时间
+     */
+    function checkIsTimeGreaterThanNow(time) {
+        let nowTimeStamp = new Date().getTime();
+        let timeStamp = new Date(time).getTime();
+
+        let dividend;
+        switch(currentParam.accuracy) {
+            case '0':
+                dividend = 10*1000;
+                break;
+            case '1':
+                dividend = 60*1000;
+                break;
+            case '2':
+                dividend = 600*1000;
+                break;
+            case '3':
+                dividend = 60*60*1000;
+                break;
+        }
+        let calcResult = (nowTimeStamp - timeStamp) / dividend;
+        if (calcResult >= 1) {
+            return false;
+        } else {
+            return true;
+        }
+    };
+
+    /**
+     * 获取x坐标
+     * @param startTime 开始时间
+     * @param type 坐标刻度 0->10s, 1->1min, 2->10min, 3->1h
+     * @param num 数据数量
+     */
+    function getXAxis () {
+        let startTime = new Date(currentParam.startDate).getTime();
+        let nowTime = new Date();
+
+        let interval = 0;
+        switch (currentParam.accuracy) {
+            case '0':
+                interval = 10 * 1000;
+                break;
+            case '1':
+                interval = 60 * 1000;
+                break;
+            case '2':
+                interval = 600 * 1000;
+                break;
+            case '3':
+                interval = 60 * 60 * 1000;
+                break;
+        }
+
+        var xAxis = new Array();
+        for (let i = 0; i < currentParam.num; i++) {
+            xAxis[i] = new Date(startTime).Format("yyyy-MM-dd hh:mm:ss")
+            startTime += interval;
+
+            if (startTime > nowTime.getTime()) { // xAxis的最大刻度不能超过当前时间
+                break;
+            }
+        }
+
+        return xAxis;
+    };
+
+    // 时间框格式化
+    $("#startDate").datetimepicker({
+        language: 'zh-CN',
+        format: 'yyyy-mm-dd hh:00',//显示格式
+        todayBtn: 1,
+        autoclose: 1,
+        todayHighlight: 1,
+        clearBtn: 1,
+        endDate: getNowTime(),
+        minView: 'day'
+    });
+
+</script>
+
+</body>
+
+</html>
